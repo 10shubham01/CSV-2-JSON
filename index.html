@@ -1,0 +1,1742 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>CSV to JSON Converter</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <style>
+      .fade-in {
+        animation: fadeIn 0.3s ease-in;
+      }
+      @keyframes fadeIn {
+        from {
+          opacity: 0;
+          transform: translateY(10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* JSON Tree Styles */
+      .json-tree {
+        font-family: "Courier New", monospace;
+        line-height: 1.6;
+      }
+
+      .json-key {
+        color: #881391;
+        font-weight: 500;
+      }
+
+      .json-string {
+        color: #c41a16;
+      }
+
+      .json-number {
+        color: #1c00cf;
+      }
+
+      .json-boolean {
+        color: #0d22aa;
+        font-weight: 500;
+      }
+
+      .json-null {
+        color: #808080;
+        font-style: italic;
+      }
+
+      .json-collapsible {
+        cursor: pointer;
+        user-select: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+      }
+
+      .json-collapsible:hover {
+        background-color: rgba(0, 0, 0, 0.05);
+        border-radius: 3px;
+      }
+
+      .json-toggle {
+        display: inline-block;
+        width: 12px;
+        height: 12px;
+        font-size: 10px;
+        line-height: 12px;
+        text-align: center;
+        color: #666;
+        transition: transform 0.2s;
+      }
+
+      .json-toggle.collapsed {
+        transform: rotate(-90deg);
+      }
+
+      .json-content {
+        margin-left: 20px;
+        border-left: 1px solid #e5e7eb;
+        padding-left: 10px;
+      }
+
+      .json-content.collapsed {
+        display: none;
+      }
+
+      .json-item {
+        margin: 2px 0;
+      }
+
+      .json-bracket {
+        color: #666;
+        font-weight: bold;
+      }
+
+      .json-comma {
+        color: #666;
+      }
+
+      .json-count {
+        color: #999;
+        font-size: 0.85em;
+        margin-left: 4px;
+      }
+
+      /* Fullscreen Styles */
+      .fullscreen-container {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 9999;
+        background: white;
+        padding: 0;
+        overflow: hidden;
+      }
+
+      .fullscreen-container .json-tree,
+      .fullscreen-container pre {
+        height: 100vh;
+        border: none;
+        border-radius: 0;
+        padding: 1.5rem;
+      }
+
+      .fullscreen-container h2,
+      .fullscreen-container #stats,
+      .fullscreen-container .flex.gap-3 {\n        display: none !important;\n      }\n      \n      /* Hide only the view controls, not the search bar */\n      .fullscreen-container > div > .mb-3:not(.search-bar) {\n        display: none !important;\n      }\n      \n      /* Position search bar at top in fullscreen */\n      .fullscreen-container .search-bar {\n        position: fixed;\n        top: 1rem;\n        left: 1rem;\n        right: 80px;\n        z-index: 10001;\n        background: rgba(255, 255, 255, 0.95);\n        backdrop-filter: blur(8px);\n        padding: 0.5rem;\n        border-radius: 0.5rem;\n        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);\n      }\n      \n      /* Adjust JSON view padding in fullscreen to account for search bar */\n      .fullscreen-container .json-tree,\n      .fullscreen-container pre {\n        padding-top: 5rem;\n      }
+
+      .fullscreen-container .mb-4.relative {
+        margin-bottom: 0;
+      }
+
+      .fullscreen-exit-btn {
+        position: fixed;
+        top: 1rem;
+        right: 1rem;
+        z-index: 10000;
+        background: rgba(0, 0, 0, 0.7);
+        color: white;
+        border: none;
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        cursor: pointer;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        transition: background 0.2s;
+      }
+
+      .fullscreen-exit-btn:hover {
+        background: rgba(0, 0, 0, 0.9);
+      }
+
+      .fullscreen-container .fullscreen-exit-btn {
+        display: flex;
+      }
+
+      /* Search Highlight Styles */
+      .search-highlight {
+        background-color: #fef08a;
+        padding: 2px 0;
+        border-radius: 2px;
+      }
+
+      .search-highlight-active {
+        background-color: #fbbf24;
+        font-weight: 600;
+      }
+
+      .search-bar {
+        animation: slideDown 0.3s ease-out;
+      }
+
+      @keyframes slideDown {
+        from {
+          opacity: 0;
+          transform: translateY(-10px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      /* Copy Button Styles */
+      .json-item-wrapper {
+        position: relative;
+        display: inline-block;
+      }
+
+      .json-copy-btn {
+        opacity: 0;
+        position: absolute;
+        right: -24px;
+        top: 0;
+        background: #3b82f6;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 2px 6px;
+        cursor: pointer;
+        font-size: 10px;
+        transition:
+          opacity 0.2s,
+          background 0.2s;
+        z-index: 10;
+      }
+
+      .json-item-wrapper:hover .json-copy-btn {
+        opacity: 1;
+      }
+
+      .json-copy-btn:hover {
+        background: #2563eb;
+      }
+
+      .json-copy-btn.copied {
+        background: #10b981;
+      }
+
+      /* Keyboard Shortcuts Modal */
+      .shortcuts-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        background: rgba(0, 0, 0, 0.5);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 10000;
+      }
+
+      .shortcuts-content {
+        background: white;
+        border-radius: 12px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow: auto;
+        animation: slideDown 0.3s ease-out;
+      }
+
+      .shortcut-key {
+        background: #f3f4f6;
+        padding: 4px 8px;
+        border-radius: 4px;
+        font-family: monospace;
+        font-size: 12px;
+        border: 1px solid #d1d5db;
+      }
+    </style>
+  </head>
+  <body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+      <!-- Header -->
+      <div class="text-center mb-8 relative">
+        <button
+          onclick="toggleShortcutsModal()"
+          class="absolute right-0 top-0 p-2 hover:bg-white hover:shadow-md rounded-lg transition"
+          title="Keyboard Shortcuts (Shift+?)"
+        >
+          <svg
+            class="w-6 h-6 text-gray-600"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+            ></path>
+          </svg>
+        </button>
+        <h1 class="text-4xl font-bold text-gray-800 mb-2">
+          CSV to JSON Converter
+        </h1>
+        <p class="text-gray-600">
+          Convert your CSV data to JSON format instantly
+        </p>
+      </div>
+
+      <!-- Main Content -->
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <!-- Input Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+          <h2
+            class="text-2xl font-semibold text-gray-800 mb-4 flex items-center"
+          >
+            <svg
+              class="w-6 h-6 mr-2 text-blue-500"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+              ></path>
+            </svg>
+            Input CSV
+          </h2>
+
+          <!-- File Upload -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2"
+              >Upload CSV File</label
+            >
+            <div class="flex items-center justify-center w-full">
+              <label
+                for="csvFile"
+                class="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100 transition"
+              >
+                <div
+                  class="flex flex-col items-center justify-center pt-5 pb-6"
+                >
+                  <svg
+                    class="w-10 h-10 mb-3 text-gray-400"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+                    ></path>
+                  </svg>
+                  <p class="mb-2 text-sm text-gray-500">
+                    <span class="font-semibold">Click to upload</span> or drag
+                    and drop
+                  </p>
+                  <p class="text-xs text-gray-500">CSV file</p>
+                </div>
+                <input
+                  id="csvFile"
+                  type="file"
+                  class="hidden"
+                  accept=".csv"
+                  onchange="handleFileUpload(event)"
+                />
+              </label>
+            </div>
+          </div>
+
+          <div class="relative mb-4">
+            <div class="absolute inset-0 flex items-center">
+              <div class="w-full border-t border-gray-300"></div>
+            </div>
+            <div class="relative flex justify-center text-sm">
+              <span class="px-2 bg-white text-gray-500">OR</span>
+            </div>
+          </div>
+
+          <!-- Text Input -->
+          <div class="mb-4">
+            <label
+              for="csvInput"
+              class="block text-sm font-medium text-gray-700 mb-2"
+              >Paste CSV Data</label
+            >
+            <textarea
+              id="csvInput"
+              rows="12"
+              class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent font-mono text-sm"
+              placeholder="name,age,city&#10;John,30,New York&#10;Jane,25,London&#10;Bob,35,Paris"
+              oninput="convertCSVToJSON()"
+            ></textarea>
+          </div>
+
+          <!-- Options -->
+          <div class="space-y-3">
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                id="hasHeader"
+                checked
+                onchange="convertCSVToJSON()"
+                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span class="text-sm text-gray-700">First row is header</span>
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                id="prettyPrint"
+                checked
+                onchange="convertCSVToJSON()"
+                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span class="text-sm text-gray-700"
+                >Pretty print (formatted)</span
+              >
+            </label>
+            <label class="flex items-center space-x-2 cursor-pointer">
+              <input
+                type="checkbox"
+                id="parseNested"
+                checked
+                onchange="convertCSVToJSON()"
+                class="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+              />
+              <span class="text-sm text-gray-700"
+                >Parse nested objects & arrays</span
+              >
+            </label>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-3 mt-6">
+            <button
+              onclick="convertCSVToJSON()"
+              class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                ></path>
+              </svg>
+              Convert
+            </button>
+            <button
+              onclick="clearAll()"
+              class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-medium py-2 px-4 rounded-lg transition"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+
+        <!-- Output Section -->
+        <div class="bg-white rounded-lg shadow-lg p-6" id="outputSection">
+          <!-- Fullscreen Exit Button -->
+          <button
+            id="fullscreenExitBtn"
+            onclick="toggleFullscreen()"
+            class="fullscreen-exit-btn"
+            title="Exit Fullscreen (ESC or F11)"
+          >
+            <svg
+              class="w-5 h-5"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                stroke-width="2"
+                d="M6 18L18 6M6 6l12 12"
+              ></path>
+            </svg>
+          </button>
+
+          <h2
+            class="text-2xl font-semibold text-gray-800 mb-4 flex items-center justify-between"
+          >
+            <div class="flex items-center">
+              <svg
+                class="w-6 h-6 mr-2 text-green-500"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
+                ></path>
+              </svg>
+              Output JSON
+            </div>
+            <button
+              onclick="toggleFullscreen()"
+              id="fullscreenBtn"
+              class="p-2 hover:bg-gray-100 rounded-lg transition"
+              title="Toggle Fullscreen"
+            >
+              <svg
+                id="fullscreenIcon"
+                class="w-5 h-5 text-gray-600"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+                ></path>
+              </svg>
+            </button>
+          </h2>
+
+          <!-- Stats -->
+          <div
+            id="stats"
+            class="hidden mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200"
+          >
+            <div class="flex items-center justify-between text-sm">
+              <span class="text-gray-600"
+                >Records:
+                <span id="recordCount" class="font-semibold text-blue-600"
+                  >0</span
+                ></span
+              >
+              <span class="text-gray-600"
+                >Size:
+                <span id="jsonSize" class="font-semibold text-blue-600"
+                  >0 KB</span
+                ></span
+              >
+            </div>
+          </div>
+
+          <!-- View Controls -->
+          <div class="mb-3 flex items-center justify-between">
+            <div class="flex gap-2">
+              <button
+                onclick="setViewMode('tree')"
+                id="treeViewBtn"
+                class="px-3 py-1 text-xs bg-blue-600 text-white rounded transition"
+              >
+                Tree View
+              </button>
+              <button
+                onclick="setViewMode('raw')"
+                id="rawViewBtn"
+                class="px-3 py-1 text-xs bg-gray-200 text-gray-700 rounded transition hover:bg-gray-300"
+              >
+                Raw JSON
+              </button>
+            </div>
+            <div id="treeControls" class="flex gap-2">
+              <button
+                onclick="expandAll()"
+                class="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded transition hover:bg-gray-200"
+                title="Expand All"
+              >
+                <svg
+                  class="w-4 h-4 inline mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+                  ></path>
+                </svg>
+                Expand
+              </button>
+              <button
+                onclick="collapseAll()"
+                class="px-3 py-1 text-xs bg-gray-100 text-gray-700 rounded transition hover:bg-gray-200"
+                title="Collapse All"
+              >
+                <svg
+                  class="w-4 h-4 inline mr-1"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M18 12H6"
+                  ></path>
+                </svg>
+                Collapse
+              </button>
+            </div>
+          </div>
+
+          <!-- Search Bar -->
+          <div class="mb-3 search-bar">
+            <div class="flex gap-2 items-center">
+              <div class="flex-1 relative">
+                <input
+                  type="text"
+                  id="searchInput"
+                  placeholder="Search in JSON output..."
+                  class="w-full px-3 py-2 pl-10 pr-10 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  oninput="searchJSON()"
+                  onkeydown="handleSearchKeydown(event)"
+                />
+                <svg
+                  class="w-5 h-5 absolute left-3 top-2.5 text-gray-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    stroke-width="2"
+                    d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                  ></path>
+                </svg>
+                <button
+                  onclick="clearSearch()"
+                  id="clearSearchBtn"
+                  class="hidden absolute right-3 top-2.5 text-gray-400 hover:text-gray-600"
+                >
+                  <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                    <path
+                      fill-rule="evenodd"
+                      d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+                      clip-rule="evenodd"
+                    />
+                  </svg>
+                </button>
+              </div>
+              <div
+                id="searchResults"
+                class="hidden text-sm text-gray-600 whitespace-nowrap"
+              >
+                <span id="searchCount">0 / 0</span>
+              </div>
+              <div id="searchNav" class="hidden flex gap-1">
+                <button
+                  onclick="navigateSearch('prev')"
+                  class="p-2 bg-gray-100 hover:bg-gray-200 rounded transition"
+                  title="Previous (Shift+Enter)"
+                >
+                  <svg
+                    class="w-4 h-4 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M5 15l7-7 7 7"
+                    ></path>
+                  </svg>
+                </button>
+                <button
+                  onclick="navigateSearch('next')"
+                  class="p-2 bg-gray-100 hover:bg-gray-200 rounded transition"
+                  title="Next (Enter)"
+                >
+                  <svg
+                    class="w-4 h-4 text-gray-600"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                      stroke-width="2"
+                      d="M19 9l-7 7-7-7"
+                    ></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- JSON Output -->
+          <div class="mb-4 relative">
+            <div
+              id="jsonTreeView"
+              class="json-tree w-full h-96 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 overflow-auto text-sm"
+            ></div>
+            <pre
+              id="jsonRawView"
+              class="hidden w-full h-96 px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 overflow-auto font-mono text-sm text-gray-800"
+            ></pre>
+          </div>
+
+          <!-- Action Buttons -->
+          <div class="flex gap-3">
+            <button
+              onclick="copyToClipboard()"
+              class="flex-1 bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                ></path>
+              </svg>
+              Copy JSON
+            </button>
+            <button
+              onclick="downloadJSON()"
+              class="flex-1 bg-purple-600 hover:bg-purple-700 text-white font-medium py-2 px-4 rounded-lg transition flex items-center justify-center"
+            >
+              <svg
+                class="w-5 h-5 mr-2"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+                ></path>
+              </svg>
+              Download
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Toast Notification -->
+      <div
+        id="toast"
+        class="hidden fixed bottom-4 right-4 bg-gray-800 text-white px-6 py-3 rounded-lg shadow-lg fade-in"
+      >
+        <span id="toastMessage"></span>
+      </div>
+
+      <!-- Keyboard Shortcuts Modal -->
+      <div
+        id="shortcutsModal"
+        class="hidden shortcuts-modal"
+        onclick="if(event.target.id === 'shortcutsModal') toggleShortcutsModal()"
+      >
+        <div class="shortcuts-content p-6" onclick="event.stopPropagation()">
+          <div class="flex justify-between items-center mb-4">
+            <h2 class="text-2xl font-bold text-gray-800">Keyboard Shortcuts</h2>
+            <button
+              onclick="toggleShortcutsModal()"
+              class="text-gray-500 hover:text-gray-700"
+            >
+              <svg
+                class="w-6 h-6"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M6 18L18 6M6 6l12 12"
+                ></path>
+              </svg>
+            </button>
+          </div>
+
+          <div class="space-y-4">
+            <div>
+              <h3 class="font-semibold text-gray-700 mb-2">General</h3>
+              <div class="space-y-2">
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Open file selector</span>
+                  <span class="shortcut-key">Ctrl+O</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Convert CSV</span>
+                  <span class="shortcut-key">Ctrl+Enter</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Clear all</span>
+                  <span class="shortcut-key">Ctrl+Shift+C</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Show shortcuts</span>
+                  <span class="shortcut-key">Shift+?</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="font-semibold text-gray-700 mb-2">Output</h3>
+              <div class="space-y-2">
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Toggle fullscreen</span>
+                  <span class="shortcut-key">F11</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Exit fullscreen</span>
+                  <span class="shortcut-key">Esc</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Copy JSON</span>
+                  <span class="shortcut-key">Ctrl+Shift+C</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Download JSON</span>
+                  <span class="shortcut-key">Ctrl+S</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Expand all</span>
+                  <span class="shortcut-key">Ctrl+E</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Collapse all</span>
+                  <span class="shortcut-key">Ctrl+Shift+E</span>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 class="font-semibold text-gray-700 mb-2">Search</h3>
+              <div class="space-y-2">
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Focus search</span>
+                  <span class="shortcut-key">Ctrl+F</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Next match</span>
+                  <span class="shortcut-key">Enter</span>
+                </div>
+                <div
+                  class="flex justify-between items-center py-2 border-b border-gray-200"
+                >
+                  <span class="text-gray-600">Previous match</span>
+                  <span class="shortcut-key">Shift+Enter</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      let currentJSON = null;
+      let viewMode = "tree"; // 'tree' or 'raw'
+      let isFullscreen = false;
+      let searchMatches = [];
+      let currentSearchIndex = 0;
+
+      // Global keyboard shortcuts
+      document.addEventListener("keydown", function (e) {
+        // Ctrl+O - Open file selector
+        if ((e.ctrlKey || e.metaKey) && e.key === "o") {
+          e.preventDefault();
+          document.getElementById("csvFile").click();
+        }
+
+        // Ctrl+Enter - Convert
+        if ((e.ctrlKey || e.metaKey) && e.key === "Enter") {
+          e.preventDefault();
+          convertCSVToJSON();
+        }
+
+        // Ctrl+Shift+C - Copy JSON
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "C") {
+          e.preventDefault();
+          copyToClipboard();
+        }
+
+        // Ctrl+S - Download
+        if ((e.ctrlKey || e.metaKey) && e.key === "s") {
+          e.preventDefault();
+          downloadJSON();
+        }
+
+        // F11 - Toggle fullscreen
+        if (e.key === "F11") {
+          e.preventDefault();
+          toggleFullscreen();
+        }
+
+        // Ctrl+F - Focus search
+        if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+          e.preventDefault();
+          document.getElementById("searchInput").focus();
+        }
+
+        // Ctrl+E - Expand all
+        if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === "e") {
+          e.preventDefault();
+          expandAll();
+        }
+
+        // Ctrl+Shift+E - Collapse all
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "E") {
+          e.preventDefault();
+          collapseAll();
+        }
+
+        // Ctrl+Shift+C - Clear all
+        if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "c") {
+          e.preventDefault();
+          clearAll();
+        }
+
+        // Shift+? - Show shortcuts
+        if (e.shiftKey && e.key === "?") {
+          e.preventDefault();
+          toggleShortcutsModal();
+        }
+      });
+
+      function toggleShortcutsModal() {
+        const modal = document.getElementById("shortcutsModal");
+        modal.classList.toggle("hidden");
+      }
+
+      function copyObjectOrArray(data, btnElement) {
+        const jsonString = JSON.stringify(data, null, 2);
+        navigator.clipboard
+          .writeText(jsonString)
+          .then(() => {
+            btnElement.textContent = "✓";
+            btnElement.classList.add("copied");
+            setTimeout(() => {
+              btnElement.textContent = "Copy";
+              btnElement.classList.remove("copied");
+            }, 1500);
+          })
+          .catch((err) => {
+            showToast("Failed to copy: " + err.message, "error");
+          });
+      }
+
+      // Toggle fullscreen mode
+      function toggleFullscreen() {
+        const outputSection = document.getElementById("outputSection");
+        const fullscreenIcon = document.getElementById("fullscreenIcon");
+        const exitBtn = document.getElementById("fullscreenExitBtn");
+
+        isFullscreen = !isFullscreen;
+
+        if (isFullscreen) {
+          outputSection.classList.add("fullscreen-container");
+          document.body.style.overflow = "hidden";
+
+          // Change icon to exit fullscreen
+          fullscreenIcon.innerHTML = `
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"
+            />`;
+        } else {
+          outputSection.classList.remove("fullscreen-container");
+          document.body.style.overflow = "";
+
+          // Change icon back to fullscreen
+          fullscreenIcon.innerHTML = `
+            <path
+              stroke-linecap="round"
+              stroke-linejoin="round"
+              stroke-width="2"
+              d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+            />`;
+        }
+      }
+
+      // ESC key to exit fullscreen
+      document.addEventListener("keydown", function (e) {
+        if (e.key === "Escape" && isFullscreen) {
+          toggleFullscreen();
+        }
+      });
+
+      // Search functionality
+      function searchJSON() {
+        const searchInput = document.getElementById("searchInput");
+        const searchTerm = searchInput.value.trim();
+        const clearBtn = document.getElementById("clearSearchBtn");
+        const searchResults = document.getElementById("searchResults");
+        const searchNav = document.getElementById("searchNav");
+        const searchCount = document.getElementById("searchCount");
+
+        // Show/hide clear button
+        if (searchTerm) {
+          clearBtn.classList.remove("hidden");
+        } else {
+          clearBtn.classList.add("hidden");
+          searchResults.classList.add("hidden");
+          searchNav.classList.add("hidden");
+          removeSearchHighlights();
+          return;
+        }
+
+        if (searchTerm.length < 2) {
+          searchResults.classList.add("hidden");
+          searchNav.classList.add("hidden");
+          return;
+        }
+
+        // Perform search
+        if (viewMode === "tree") {
+          searchInTreeView(searchTerm);
+        } else {
+          searchInRawView(searchTerm);
+        }
+
+        // Update UI
+        if (searchMatches.length > 0) {
+          searchResults.classList.remove("hidden");
+          searchNav.classList.remove("hidden");
+          currentSearchIndex = 0;
+          updateSearchCount();
+          highlightCurrentMatch();
+        } else {
+          searchResults.classList.remove("hidden");
+          searchNav.classList.add("hidden");
+          searchCount.textContent = "No matches";
+        }
+      }
+
+      function searchInTreeView(searchTerm) {
+        const treeView = document.getElementById("jsonTreeView");
+        removeSearchHighlights();
+        searchMatches = [];
+
+        const jsonString = JSON.stringify(currentJSON, null, 2).toLowerCase();
+        const lowerSearchTerm = searchTerm.toLowerCase();
+
+        // Find all text nodes and search within them
+        const walker = document.createTreeWalker(
+          treeView,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+        );
+
+        let node;
+        while ((node = walker.nextNode())) {
+          const text = node.textContent;
+          const lowerText = text.toLowerCase();
+
+          if (lowerText.includes(lowerSearchTerm)) {
+            const parent = node.parentNode;
+            const index = lowerText.indexOf(lowerSearchTerm);
+
+            if (index !== -1) {
+              const before = text.substring(0, index);
+              const match = text.substring(index, index + searchTerm.length);
+              const after = text.substring(index + searchTerm.length);
+
+              const span = document.createElement("span");
+              span.className = "search-highlight";
+              span.textContent = match;
+              searchMatches.push(span);
+
+              const fragment = document.createDocumentFragment();
+              if (before) fragment.appendChild(document.createTextNode(before));
+              fragment.appendChild(span);
+              if (after) fragment.appendChild(document.createTextNode(after));
+
+              parent.replaceChild(fragment, node);
+            }
+          }
+        }
+      }
+
+      function searchInRawView(searchTerm) {
+        const rawView = document.getElementById("jsonRawView");
+        const originalText = rawView.textContent;
+        removeSearchHighlights();
+        searchMatches = [];
+
+        const lowerText = originalText.toLowerCase();
+        const lowerSearchTerm = searchTerm.toLowerCase();
+        let index = 0;
+        let html = "";
+        let lastIndex = 0;
+
+        while ((index = lowerText.indexOf(lowerSearchTerm, index)) !== -1) {
+          html += escapeHtml(originalText.substring(lastIndex, index));
+          html += `<span class="search-highlight">${escapeHtml(originalText.substring(index, index + searchTerm.length))}</span>`;
+          lastIndex = index + searchTerm.length;
+          index = lastIndex;
+        }
+
+        html += escapeHtml(originalText.substring(lastIndex));
+        rawView.innerHTML = html;
+
+        // Collect all highlight spans
+        searchMatches = Array.from(
+          rawView.querySelectorAll(".search-highlight")
+        );
+      }
+
+      function removeSearchHighlights() {
+        document.querySelectorAll(".search-highlight").forEach((el) => {
+          el.classList.remove("search-highlight-active");
+        });
+
+        if (viewMode === "raw") {
+          const rawView = document.getElementById("jsonRawView");
+          if (currentJSON) {
+            const prettyPrint = document.getElementById("prettyPrint").checked;
+            rawView.textContent = prettyPrint
+              ? JSON.stringify(currentJSON, null, 2)
+              : JSON.stringify(currentJSON);
+          }
+        }
+      }
+
+      function clearSearch() {
+        document.getElementById("searchInput").value = "";
+        searchJSON();
+      }
+
+      function navigateSearch(direction) {
+        if (searchMatches.length === 0) return;
+
+        if (direction === "next") {
+          currentSearchIndex = (currentSearchIndex + 1) % searchMatches.length;
+        } else {
+          currentSearchIndex =
+            (currentSearchIndex - 1 + searchMatches.length) %
+            searchMatches.length;
+        }
+
+        updateSearchCount();
+        highlightCurrentMatch();
+      }
+
+      function updateSearchCount() {
+        const searchCount = document.getElementById("searchCount");
+        searchCount.textContent = `${currentSearchIndex + 1} / ${searchMatches.length}`;
+      }
+
+      function highlightCurrentMatch() {
+        searchMatches.forEach((el, idx) => {
+          if (idx === currentSearchIndex) {
+            el.classList.add("search-highlight-active");
+            el.scrollIntoView({ behavior: "smooth", block: "center" });
+          } else {
+            el.classList.remove("search-highlight-active");
+          }
+        });
+      }
+
+      function handleSearchKeydown(event) {
+        if (event.key === "Enter") {
+          event.preventDefault();
+          if (event.shiftKey) {
+            navigateSearch("prev");
+          } else {
+            navigateSearch("next");
+          }
+        }
+      }
+
+      // Render JSON as collapsible tree
+      function renderJSONTree(data, isRoot = true) {
+        if (data === null) {
+          return `<span class="json-null">null</span>`;
+        }
+
+        if (typeof data === "string") {
+          return `<span class="json-string">"${escapeHtml(data)}"</span>`;
+        }
+
+        if (typeof data === "number") {
+          return `<span class="json-number">${data}</span>`;
+        }
+
+        if (typeof data === "boolean") {
+          return `<span class="json-boolean">${data}</span>`;
+        }
+
+        const isArray = Array.isArray(data);
+        const keys = isArray ? data : Object.keys(data);
+        const length = isArray ? data.length : keys.length;
+
+        if (length === 0) {
+          return isArray
+            ? '<span class="json-bracket">[]</span>'
+            : '<span class="json-bracket">{}</span>';
+        }
+
+        const id = "json-" + Math.random().toString(36).substr(2, 9);
+        const openBracket = isArray ? "[" : "{";
+        const closeBracket = isArray ? "]" : "}";
+        const dataStr = JSON.stringify(data).replace(/"/g, "&quot;");
+
+        let html = `<div class="json-item json-item-wrapper">`;
+        html += `<span class="json-collapsible" onclick="toggleCollapse('${id}')">`;
+        html += `<span class="json-toggle" id="toggle-${id}">▼</span>`;
+        html += `<span class="json-bracket">${openBracket}</span>`;
+        html += `<span class="json-count">${length} ${isArray ? "items" : "properties"}</span>`;
+        html += `</span>`;
+        html += `<button class="json-copy-btn" onclick="event.stopPropagation(); copyObjectOrArray(JSON.parse(decodeURIComponent('${encodeURIComponent(JSON.stringify(data))}')), this)" title="Copy this ${isArray ? "array" : "object"}">Copy</button>`;
+
+        html += `<div class="json-content" id="content-${id}">`;
+
+        if (isArray) {
+          data.forEach((item, index) => {
+            html += `<div class="json-item">`;
+            html += renderJSONTree(item, false);
+            if (index < data.length - 1) {
+              html += `<span class="json-comma">,</span>`;
+            }
+            html += `</div>`;
+          });
+        } else {
+          const entries = Object.entries(data);
+          entries.forEach(([key, value], index) => {
+            html += `<div class="json-item">`;
+            html += `<span class="json-key">"${escapeHtml(key)}"</span>: `;
+            html += renderJSONTree(value, false);
+            if (index < entries.length - 1) {
+              html += `<span class="json-comma">,</span>`;
+            }
+            html += `</div>`;
+          });
+        }
+
+        html += `</div>`;
+        html += `<span class="json-bracket">${closeBracket}</span>`;
+        html += `</div>`;
+
+        return html;
+      }
+
+      function escapeHtml(text) {
+        const map = {
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#039;",
+        };
+        return text.replace(/[&<>"']/g, (m) => map[m]);
+      }
+
+      function toggleCollapse(id) {
+        const content = document.getElementById("content-" + id);
+        const toggle = document.getElementById("toggle-" + id);
+
+        if (content && toggle) {
+          content.classList.toggle("collapsed");
+          toggle.classList.toggle("collapsed");
+        }
+      }
+
+      function expandAll() {
+        document.querySelectorAll(".json-content").forEach((el) => {
+          el.classList.remove("collapsed");
+        });
+        document.querySelectorAll(".json-toggle").forEach((el) => {
+          el.classList.remove("collapsed");
+        });
+      }
+
+      function collapseAll() {
+        document.querySelectorAll(".json-content").forEach((el) => {
+          el.classList.add("collapsed");
+        });
+        document.querySelectorAll(".json-toggle").forEach((el) => {
+          el.classList.add("collapsed");
+        });
+      }
+
+      function setViewMode(mode) {
+        viewMode = mode;
+        const treeView = document.getElementById("jsonTreeView");
+        const rawView = document.getElementById("jsonRawView");
+        const treeBtn = document.getElementById("treeViewBtn");
+        const rawBtn = document.getElementById("rawViewBtn");
+        const treeControls = document.getElementById("treeControls");
+
+        if (mode === "tree") {
+          treeView.classList.remove("hidden");
+          rawView.classList.add("hidden");
+          treeBtn.classList.add("bg-blue-600", "text-white");
+          treeBtn.classList.remove("bg-gray-200", "text-gray-700");
+          rawBtn.classList.remove("bg-blue-600", "text-white");
+          rawBtn.classList.add("bg-gray-200", "text-gray-700");
+          treeControls.classList.remove("hidden");
+        } else {
+          treeView.classList.add("hidden");
+          rawView.classList.remove("hidden");
+          rawBtn.classList.add("bg-blue-600", "text-white");
+          rawBtn.classList.remove("bg-gray-200", "text-gray-700");
+          treeBtn.classList.remove("bg-blue-600", "text-white");
+          treeBtn.classList.add("bg-gray-200", "text-gray-700");
+          treeControls.classList.add("hidden");
+        }
+      }
+
+      // Parse nested objects from dot notation (e.g., "user.name" -> {user: {name: "..."}})
+      function parseNestedObject(obj) {
+        const result = {};
+
+        for (const key in obj) {
+          const value = obj[key];
+
+          // Try to parse JSON strings
+          let parsedValue = value;
+          if (typeof value === "string" && value.trim()) {
+            // Check if it's a JSON string
+            if (
+              (value.startsWith("{") && value.endsWith("}")) ||
+              (value.startsWith("[") && value.endsWith("]"))
+            ) {
+              try {
+                parsedValue = JSON.parse(value);
+              } catch (e) {
+                // Not valid JSON, keep as string
+                parsedValue = value;
+              }
+            }
+            // Check if it's a comma-separated array (e.g., "tag1,tag2,tag3")
+            else if (
+              value.includes(",") &&
+              !key.includes(".") &&
+              /^[^,]+(,[^,]+)+$/.test(value)
+            ) {
+              // Only convert to array if it looks like a list
+              const items = value.split(",").map((item) => item.trim());
+              // Check if all items are numbers
+              if (items.every((item) => !isNaN(item) && item !== "")) {
+                parsedValue = items.map(Number);
+              } else {
+                parsedValue = items;
+              }
+            }
+          }
+
+          // Handle dot notation for nested objects
+          if (key.includes(".")) {
+            const keys = key.split(".");
+            let current = result;
+
+            for (let i = 0; i < keys.length - 1; i++) {
+              const k = keys[i];
+              if (!current[k]) {
+                current[k] = {};
+              }
+              current = current[k];
+            }
+
+            current[keys[keys.length - 1]] = parsedValue;
+          }
+          // Handle array notation (e.g., "tags[0]", "tags[1]")
+          else if (key.match(/\[\d+\]$/)) {
+            const arrayMatch = key.match(/^(.+)\[(\d+)\]$/);
+            if (arrayMatch) {
+              const arrayName = arrayMatch[1];
+              const index = parseInt(arrayMatch[2]);
+
+              if (!result[arrayName]) {
+                result[arrayName] = [];
+              }
+              result[arrayName][index] = parsedValue;
+            }
+          } else {
+            result[key] = parsedValue;
+          }
+        }
+
+        return result;
+      }
+
+      function handleFileUpload(event) {
+        const file = event.target.files[0];
+        if (file) {
+          const reader = new FileReader();
+          reader.onload = function (e) {
+            document.getElementById("csvInput").value = e.target.result;
+            convertCSVToJSON();
+          };
+          reader.readAsText(file);
+        }
+      }
+
+      function convertCSVToJSON() {
+        const csvInput = document.getElementById("csvInput").value.trim();
+        const hasHeader = document.getElementById("hasHeader").checked;
+        const prettyPrint = document.getElementById("prettyPrint").checked;
+        const parseNested = document.getElementById("parseNested").checked;
+        const jsonTreeView = document.getElementById("jsonTreeView");
+        const jsonRawView = document.getElementById("jsonRawView");
+        const stats = document.getElementById("stats");
+
+        if (!csvInput) {
+          jsonTreeView.innerHTML = "";
+          jsonRawView.textContent = "";
+          stats.classList.add("hidden");
+          currentJSON = null;
+          return;
+        }
+
+        try {
+          Papa.parse(csvInput, {
+            header: hasHeader,
+            skipEmptyLines: true,
+            complete: function (results) {
+              let data = results.data;
+
+              // Apply nested parsing if enabled
+              if (parseNested && hasHeader) {
+                data = data.map((row) => parseNestedObject(row));
+              }
+
+              currentJSON = data;
+              const jsonString = prettyPrint
+                ? JSON.stringify(currentJSON, null, 2)
+                : JSON.stringify(currentJSON);
+
+              // Update raw view
+              const jsonRawView = document.getElementById("jsonRawView");
+              jsonRawView.textContent = jsonString;
+
+              // Update tree view
+              const jsonTreeView = document.getElementById("jsonTreeView");
+              jsonTreeView.innerHTML = renderJSONTree(currentJSON);
+
+              // Update stats
+              document.getElementById("recordCount").textContent =
+                currentJSON.length;
+              const sizeInKB = (new Blob([jsonString]).size / 1024).toFixed(2);
+              document.getElementById("jsonSize").textContent =
+                sizeInKB + " KB";
+              stats.classList.remove("hidden");
+
+              jsonTreeView.classList.add("fade-in");
+              jsonRawView.classList.add("fade-in");
+            },
+            error: function (error) {
+              showToast("Error parsing CSV: " + error.message, "error");
+            },
+          });
+        } catch (error) {
+          showToast("Error: " + error.message, "error");
+        }
+      }
+
+      function copyToClipboard() {
+        if (!currentJSON) {
+          showToast("No JSON to copy!", "error");
+          return;
+        }
+
+        const prettyPrint = document.getElementById("prettyPrint").checked;
+        const jsonString = prettyPrint
+          ? JSON.stringify(currentJSON, null, 2)
+          : JSON.stringify(currentJSON);
+
+        navigator.clipboard
+          .writeText(jsonString)
+          .then(() => {
+            showToast("JSON copied to clipboard!", "success");
+          })
+          .catch((err) => {
+            showToast("Failed to copy: " + err.message, "error");
+          });
+      }
+
+      function downloadJSON() {
+        if (!currentJSON) {
+          showToast("No JSON to download!", "error");
+          return;
+        }
+
+        const prettyPrint = document.getElementById("prettyPrint").checked;
+        const jsonString = prettyPrint
+          ? JSON.stringify(currentJSON, null, 2)
+          : JSON.stringify(currentJSON);
+
+        const blob = new Blob([jsonString], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "converted-" + new Date().getTime() + ".json";
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        showToast("JSON file downloaded!", "success");
+      }
+
+      function clearAll() {
+        document.getElementById("csvInput").value = "";
+        document.getElementById("jsonTreeView").innerHTML = "";
+        document.getElementById("jsonRawView").textContent = "";
+        document.getElementById("stats").classList.add("hidden");
+        document.getElementById("csvFile").value = "";
+        currentJSON = null;
+      }
+
+      function loadSample(type) {
+        let sampleData = "";
+
+        switch (type) {
+          case "simple":
+            sampleData = `name,age,city
+John Doe,30,New York
+Jane Smith,25,London
+Bob Johnson,35,Paris
+Alice Brown,28,Tokyo`;
+            break;
+          case "users":
+            sampleData = `id,username,email,status
+1,johndoe,john@example.com,active
+2,janesmith,jane@example.com,active
+3,bobwilson,bob@example.com,inactive
+4,alicejones,alice@example.com,active`;
+            break;
+          case "sales":
+            sampleData = `product,quantity,price,date
+Laptop,5,999.99,2026-01-10
+Mouse,20,29.99,2026-01-11
+Keyboard,15,79.99,2026-01-11
+Monitor,8,299.99,2026-01-12`;
+            break;
+          case "nested":
+            sampleData = `user.name,user.email,user.age,address.city,address.country,tags,metadata
+John Doe,john@example.com,30,New York,USA,"developer,javascript,react","{""verified"": true, ""role"": ""admin""}"
+Jane Smith,jane@example.com,25,London,UK,"designer,ui,ux","{""verified"": true, ""role"": ""user""}"
+Bob Wilson,bob@example.com,35,Tokyo,Japan,"manager,agile","{""verified"": false, ""role"": ""user""}"`;
+            break;
+        }
+
+        document.getElementById("csvInput").value = sampleData;
+        convertCSVToJSON();
+        showToast("Sample data loaded!", "success");
+      }
+
+      function showToast(message, type = "success") {
+        const toast = document.getElementById("toast");
+        const toastMessage = document.getElementById("toastMessage");
+
+        toastMessage.textContent = message;
+        toast.classList.remove("hidden");
+
+        if (type === "error") {
+          toast.classList.add("bg-red-600");
+          toast.classList.remove("bg-gray-800");
+        } else {
+          toast.classList.add("bg-gray-800");
+          toast.classList.remove("bg-red-600");
+        }
+
+        setTimeout(() => {
+          toast.classList.add("hidden");
+        }, 3000);
+      }
+
+      // Drag and drop support
+      const dropZone = document.getElementById("csvFile").parentElement;
+
+      dropZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        dropZone.classList.add("border-blue-500", "bg-blue-50");
+      });
+
+      dropZone.addEventListener("dragleave", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-blue-500", "bg-blue-50");
+      });
+
+      dropZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        dropZone.classList.remove("border-blue-500", "bg-blue-50");
+
+        const file = e.dataTransfer.files[0];
+        if (file && file.name.endsWith(".csv")) {
+          const reader = new FileReader();
+          reader.onload = function (event) {
+            document.getElementById("csvInput").value = event.target.result;
+            convertCSVToJSON();
+          };
+          reader.readAsText(file);
+        } else {
+          showToast("Please drop a CSV file!", "error");
+        }
+      });
+    </script>
+
+    <!--
+    ========================================
+    CSV to JSON Converter - Feature Complete! ✨
+    ========================================
+    
+    Current Features:
+    ✅ CSV file upload & drag-drop
+    ✅ Paste CSV data
+    ✅ Header row detection
+    ✅ Nested objects (dot notation)
+    ✅ Array parsing
+    ✅ JSON string detection
+    ✅ Tree view with collapse/expand
+    ✅ Raw JSON view
+    ✅ Pretty print formatting
+    ✅ Copy to clipboard
+    ✅ Download JSON file
+    ✅ Fullscreen mode
+    ✅ Search with highlighting
+    ✅ Keyboard shortcuts
+    ✅ Sample data templates
+    
+    Additional Features You Can Add:
+    ========================================
+    
+    1. 📊 DATA FILTERING & SORTING
+       - Filter records by field values
+       - Sort by column (asc/desc)
+       - Group by field
+       - Show/hide columns
+    
+    2. 🔄 FORMAT CONVERSIONS
+       - JSON to CSV (reverse conversion)
+       - Export to XML
+       - Export to YAML
+       - Export to SQL INSERT statements
+       - Export to Excel (XLSX)
+    
+    3. 📈 DATA VISUALIZATION
+       - Generate charts from numeric data
+       - Show data statistics (min, max, avg)
+       - Detect data types automatically
+       - Show data preview/summary
+    
+    4. ✏️ DATA TRANSFORMATION
+       - Rename fields
+       - Transform values (uppercase, lowercase, trim)
+       - Apply custom JavaScript transformations
+       - Merge multiple CSV files
+       - Split by delimiter (advanced)
+    
+    5. ✅ VALIDATION & CLEANING
+       - Detect and highlight errors
+       - Remove duplicates
+       - Handle missing values
+       - Validate against JSON schema
+       - Fix common CSV issues
+    
+    6. 💾 STORAGE & HISTORY
+       - Save conversions to browser storage
+       - Conversion history
+       - Favorite templates
+       - Auto-save drafts
+    
+    7. 🎨 UI ENHANCEMENTS
+       - Dark/light theme toggle
+       - Custom color schemes for syntax
+       - Resizable panels
+       - Split view (CSV + JSON side by side)
+       - Line numbers in raw view
+    
+    8. 🔗 INTEGRATION
+       - Import from URL
+       - Connect to Google Sheets
+       - REST API endpoint
+       - WebSocket live updates
+       - Cloud storage integration
+    
+    9. 📱 MOBILE & ACCESSIBILITY
+       - Mobile-optimized layout
+       - Touch gestures
+       - Screen reader support
+       - Keyboard navigation improvements
+    
+    10. 🚀 PERFORMANCE
+        - Worker threads for large files
+        - Virtual scrolling for huge datasets
+        - Pagination for large results
+        - Streaming parser
+    
+    11. 🔐 ADVANCED FEATURES
+        - CSV delimiter detection
+        - Multi-sheet Excel support
+        - Encoding detection/conversion
+        - Compression (gzip output)
+        - Custom parser rules
+        - Macro/scripting support
+    
+    12. 📤 SHARING
+        - Share via URL (encode data)
+        - Generate shareable links
+        - Embed widget code
+        - Export as HTML report
+    
+    Priority Recommendations:
+    ========================================
+    🥇 JSON to CSV reverse conversion
+    🥈 Data filtering and sorting
+    🥉 Dark mode theme
+    
+    These would complement the current features perfectly!
+    -->
+  </body>
+</html>
